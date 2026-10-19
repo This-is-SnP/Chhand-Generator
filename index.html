@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chhand Generator</title>
+
+    <style>
+        body {
+            background: #000000;
+            color: #e6e6e6;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 750px;
+            margin-top: 30px;
+            margin-bottom: 50px;
+        }
+
+        h1, h2 {
+            margin-bottom: 10px;
+        }
+
+        .guide-toggle {
+            cursor: pointer;
+            display: inline-block;
+            margin-bottom: 12px;
+            color: #38bdf8;
+            font-size: 14px;
+        }
+
+        #guideContent { 
+            display: none; 
+            font-size: 13px; 
+            color: #cbd5e1; 
+            border: 1px solid #222222;
+            background: #0a0a0a;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        input, select, button {
+            padding: 10px;
+            margin: 4px 0;
+            border-radius: 6px;
+            border: 1px solid #333333;
+            background: #111111;
+            color: white;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: #222222;
+            border: 1px solid #444444;
+            color: #ffffff;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        button:hover {
+            background: #333333;
+            border-color: #666666;
+        }
+
+        .invalid {
+            border-color: #ff4d4d !important;
+        }
+
+        .pair-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .pair-label {
+            width: 60px;
+            font-size: 13px;
+            color: #888;
+        }
+
+        .pair-row input {
+            flex: 1;
+        }
+
+        .controls-panel {
+            margin-top: 15px;
+            padding: 12px;
+            background: #0d0d0d;
+            border: 1px solid #222222;
+            border-radius: 6px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #results {
+            margin-top: 10px;
+        }
+
+        #results div {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 4px;
+            border: 1px solid #222222;
+            background: #080808;
+            cursor: pointer;
+            font-family: monospace;
+        }
+
+        #results div.active {
+            background: #222222;
+            border-color: #555555;
+            color: #38bdf8;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+
+    <h1>Chhand Generator</h1>
+
+    <div class="guide-toggle" onclick="toggleGuide()">Usage Guide ▼</div>
+    <div id="guideContent">
+        <p><b>Pattern Template Logic:</b> Map position numbers to the respective inputs across pairs.</p>
+        <p><b>Example Pattern:</b> <code>1 2 2 1</code> or <code>1 2</code></p>
+        <p><b>Swar Rules:</b> Sa Re Ga Ma Pa Dha Ni</p>
+        <ul>
+            <li><code>,</code> → Komal (Re, Ga, Dha, Ni only)</li>
+            <li><code>'</code> → Tivra (Ma only)</li>
+            <li><code>*</code> → Taar Saptak (Higher)</li>
+            <li><code>.</code> → Mandra Saptak (Lower)</li>
+        </ul>
+        <p><b>Multiple Notes per Value:</b> Separate notes with spaces (e.g., <code>Re, Ma'</code>). Leave blank or omit numbers to treat as an unentered note.</p>
+    </div>
+
+    <div>
+        <label for="numPairs">Number of Pairs:</label>
+        <select id="numPairs" onchange="generatePairInputs()">
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4" selected>4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+        </select>
+    </div>
+
+    <div id="pairsContainer" style="margin-top: 10px;"></div>
+
+    <div id="patternContainer" style="margin-top: 10px;">
+        <label for="pattern">Chhand Blueprint (using 1 & 2):</label><br>
+        <input type="text" id="pattern" placeholder="e.g. 1 2 2 1" value="1 2 2 1" style="width: 100%;">
+    </div>
+
+    <div style="margin-top: 10px;">
+        <button onclick="generatePatternTaans()">Calculate Chhands</button>
+        <button onclick="copyAllTaans()">Copy All</button>
+    </div>
+
+    <div class="controls-panel">
+        <label for="bpm">BPM:</label>
+        <input type="number" id="bpm" value="120" style="width: 60px;">
+
+        <label for="scale">Scale:</label>
+        <select id="scale">
+            <option>C</option><option>C#</option><option>D</option>
+            <option>D#</option><option>E</option><option>F</option>
+            <option>F#</option><option>G</option><option>G#</option>
+            <option>A</option><option>A#</option><option>B</option>
+        </select>
+
+        <button onclick="prevTaan()">⏮</button>
+        <button onclick="togglePlay()" id="playBtn">▶</button>
+        <button onclick="nextTaan()">⏭</button>
+    </div>
+
+    <h2>Results</h2>
+    <div id="results"></div>
+
+</div>
+
+<script>
+let allTaans = [];
+let audioCtx = null;
+let isPlaying = false;
+let currentIndex = 0;
+let currentTimeout = null;
+
+const swarMap = { Sa: 0, Re: 2, Ga: 4, Ma: 5, Pa: 7, Dha: 9, Ni: 11 };
+const noteFreq = {
+    "C": 261.63, "C#": 277.18, "D": 293.66, "D#": 311.13,
+    "E": 329.63, "F": 349.23, "F#": 369.99, "G": 392.00,
+    "G#": 415.30, "A": 440.00, "A#": 466.16, "B": 493.88
+};
+
+const komalAllowed = ["Re", "Ga", "Dha", "Ni"];
+const tivraAllowed = ["Ma"];
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
+
+function toggleGuide() {
+    const g = document.getElementById('guideContent');
+    g.style.display = g.style.display === "block" ? "none" : "block";
+}
+
+function generatePairInputs() {
+    const numPairs = document.getElementById('numPairs').value;
+    const pairsContainer = document.getElementById('pairsContainer');
+    
+    const savedValues = [];
+    for (let i = 1; i <= 12; i++) {
+        const v1 = document.getElementById(`pair${i}value1`);
+        const v2 = document.getElementById(`pair${i}value2`);
+        if (v1 && v2) {
+            savedValues.push({ v1: v1.value, v2: v2.value });
+        }
+    }
+
+    pairsContainer.innerHTML = '';
+
+    for (let i = 1; i <= numPairs; i++) {
+        const pairDiv = document.createElement('div');
+        pairDiv.className = 'pair-row';
+        
+        const prevV1 = savedValues[i - 1] ? savedValues[i - 1].v1 : '';
+        const prevV2 = savedValues[i - 1] ? savedValues[i - 1].v2 : '';
+
+        pairDiv.innerHTML = `
+            <span class="pair-label">Pair ${i}:</span>
+            <input type="text" id="pair${i}value1" placeholder="Value 1 (e.g. Sa)" value="${prevV1}">
+            <input type="text" id="pair${i}value2" placeholder="Value 2 (e.g. Re)" value="${prevV2}">
+        `;
+        pairsContainer.appendChild(pairDiv);
+    }
+}
+
+function validateSingleNote(note) {
+    if (!note) return false;
+    let base = note.replace(/[,*'.]/g, '');
+    if (!swarMap.hasOwnProperty(base)) return false;
+
+    let isKomal = note.includes(',');
+    let isTivra = note.includes("'");
+
+    if (isKomal && !komalAllowed.includes(base)) return false;
+    if (isTivra && !tivraAllowed.includes(base)) return false;
+    return true;
+}
+
+function validateBoxInput(val) {
+    if (!val || val.trim() === '') return true; // Empty box is treated as note not entered
+    let notes = val.trim().split(/\s+/);
+    return notes.every(n => validateSingleNote(n));
+}
+
+function generatePatternTaans() {
+    const numPairs = parseInt(document.getElementById('numPairs').value);
+    const pattern = document.getElementById('pattern').value.trim();
+
+    if (!pattern) {
+        alert("Please enter a valid pattern blueprint (e.g. 1 2 2 1)");
+        return;
+    }
+
+    let pairs = [];
+    let isValid = true;
+
+    for (let i = 1; i <= numPairs; i++) {
+        const input1 = document.getElementById(`pair${i}value1`);
+        const input2 = document.getElementById(`pair${i}value2`);
+        
+        const v1Valid = validateBoxInput(input1.value);
+        const v2Valid = validateBoxInput(input2.value);
+
+        if (!v1Valid) input1.classList.et ? input1.classList.add('invalid') : input1.classList.add('invalid');
+        else input1.classList.remove('invalid');
+
+        if (!v2Valid) input2.classList.add('invalid');
+        else input2.classList.remove('invalid');
+
+        if (!v1Valid || !v2Valid) {
+            isValid = false;
+        } else {
+            pairs.push({ 
+                v1: input1.value ? input1.value.trim() : '', 
+                v2: input2.value ? input2.value.trim() : '' 
+            });
+        }
+    }
+
+    if (!isValid) return;
+
+    allTaans = pairs.map(pair => {
+        return pattern.replace(/[12]/g, match => {
+            return match === '1' ? pair.v1 : pair.v2;
+        }).replace(/\s+/g, ' ').trim();
+    });
+
+    currentIndex = 0;
+    render();
+}
+
+function render() {
+    const r = document.getElementById('results');
+    r.innerHTML = "";
+    allTaans.forEach((taanStr, i) => {
+        let div = document.createElement('div');
+        div.textContent = `Chhand ${i + 1}: ${taanStr}`;
+        if (i === currentIndex) div.classList.add('active');
+        div.onclick = () => {
+            currentIndex = i;
+            render();
+            if (isPlaying) {
+                clearTimeout(currentTimeout);
+                playTaan();
+            }
+        };
+        r.appendChild(div);
+    });
+}
+
+function getFrequency(s) {
+    if (!s) return 0;
+    let base = s.replace(/[,*'.]/g, '');
+    let semi = swarMap[base];
+    if (semi === undefined) return 0;
+
+    if (s.includes(',')) semi--;
+    if (s.includes("'")) semi++;
+
+    let rootFreq = noteFreq[document.getElementById('scale').value] || 261.63;
+    let freq = rootFreq * Math.pow(2, semi / 12);
+
+    if (s.includes('*')) freq *= 2;
+    if (s.includes('.')) freq /= 2;
+
+    return freq;
+}
+
+function playNote(freq, duration) {
+    if (!freq) return;
+    initAudio();
+
+    let osc = audioCtx.createOscillator();
+    let gain = audioCtx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration - 0.02);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + duration);
+}
+
+function playTaan() {
+    if (!isPlaying || allTaans.length === 0) return;
+
+    let bpm = parseFloat(document.getElementById('bpm').value) || 120;
+    let dur = 60 / bpm;
+    
+    let currentTaanStr = allTaans[currentIndex];
+    let notes = currentTaanStr.trim().split(/\s+/);
+
+    let noteIdx = 0;
+
+    function step() {
+        if (!isPlaying) return;
+
+        if (noteIdx >= notes.length) {
+            currentIndex = (currentIndex + 1) % allTaans.length;
+            render();
+            playTaan();
+            return;
+        }
+
+        let noteStr = notes[noteIdx];
+        if (noteStr && noteStr !== "") {
+            let freq = getFrequency(noteStr);
+            if (freq > 0) {
+                playNote(freq, dur);
+            }
+        }
+
+        noteIdx++;
+        currentTimeout = setTimeout(step, dur * 1000);
+    }
+
+    step();
+}
+
+function togglePlay() {
+    initAudio();
+    isPlaying = !isPlaying;
+    document.getElementById('playBtn').textContent = isPlaying ? "⏸" : "▶";
+
+    if (isPlaying) {
+        if (allTaans.length === 0) generatePatternTaans();
+        playTaan();
+    } else {
+        clearTimeout(currentTimeout);
+    }
+}
+
+function nextTaan() {
+    if (allTaans.length === 0) return;
+    clearTimeout(currentTimeout);
+    currentIndex = (currentIndex + 1) % allTaans.length;
+    render();
+    if (isPlaying) playTaan();
+}
+
+function prevTaan() {
+    if (allTaans.length === 0) return;
+    clearTimeout(currentTimeout);
+    currentIndex = (currentIndex - 1 + allTaans.length) % allTaans.length;
+    render();
+    if (isPlaying) playTaan();
+}
+
+function copyAllTaans() {
+    if (allTaans.length === 0) return;
+    let text = allTaans.map((t, i) => `Chhand ${i + 1}: ${t}`).join('\n');
+    navigator.clipboard.writeText(text);
+}
+
+generatePairInputs();
+</script>
+</body>
+</html>
